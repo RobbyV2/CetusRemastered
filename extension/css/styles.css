@@ -26,6 +26,23 @@ html {
 	border-radius: 4px;
 }
 
+[hidden] {
+	display: none !important;
+}
+
+body {
+	background: var(--background);
+	border-radius: 4px;
+	height: 700px;
+	width: 460px;
+	color: var(--text);
+}
+
+body.devtools {
+	height: 100vh;
+	width: auto;
+}
+
 .modal {
 	width: 100%;
 	height: 100%;
@@ -112,22 +129,27 @@ html {
 	width: 100%;
 }
 
-.modal-table .load-button,
-.modal-table .remove-button {
+.modal-table th {
+	text-align: left;
+	font-weight: 600;
+	padding: 4px 8px 4px 0;
+}
+
+.modal-table .patch-download,
+.modal-table .patch-remove {
 	width: 32px;
 	height: 32px;
 	cursor: pointer;
 	opacity: 0.7;
 	transition: opacity 0.2s ease;
-	will-change: opacity;
-	display: flex;
-	flex-flow: column nowrap;
-	justify-content: center;
-	align-items: center;
+	background: none;
+	border: 0;
+	color: inherit;
+	font-size: 16px;
 }
 
-.modal-table .load-button:hover,
-.modal-table .remove-button:hover {
+.modal-table .patch-download:hover,
+.modal-table .patch-remove:hover {
 	opacity: 1;
 }
 
@@ -172,6 +194,8 @@ html {
 	display: flex;
 	flex-flow: row nowrap;
 	padding: 0 16px;
+	overflow-x: auto;
+	scrollbar-width: none;
 }
 
 .tabs-content {
@@ -187,10 +211,11 @@ html {
 }
 
 .tabs-item {
+	flex: 0 0 auto;
 	padding: 14px 0 10px;
-	margin-right: 24px;
+	margin-right: 14px;
 	font-weight: 600;
-	font-size: 14px;
+	font-size: 13px;
 	line-height: 18px;
 	text-align: center;
 	letter-spacing: 0.02em;
@@ -287,62 +312,40 @@ html {
 	margin-right: 0;
 }
 
-.radio {
-	margin-top: 4px;
-	margin-bottom: 4px;
-	flex: 0 0 15%;
-	line-height: 23px;
-	font-size: 16px;
-	font-weight: normal;
-	color: var(--textGray);
-	height: 40px;
-	position: relative;
+.form-field--group > .form-field {
+	flex: 1;
+	margin-right: 8px;
 }
 
-.radio-input {
-	opacity: 0;
-	width: 100%;
-	height: 100%;
-	position: absolute;
-	top: 0;
-	left: 0;
-	z-index: 1;
-	cursor: pointer;
+.form-field--group > .form-field:last-child {
+	margin-right: 0;
 }
 
-.radio-body {
-	padding: 11px 8px;
-	position: absolute;
+select.input {
+	height: 44px;
+}
+
+.form-check {
 	display: flex;
-	flex-flow: row nowrap;
 	align-items: center;
-	left: 0;
-	top: 0;
-	width: 100%;
-	height: 100%;
-	background: var(--grayInactive);
-	border-radius: 4px;
-	transition: background 0.2s ease;
-	will-change: background;
+	gap: 8px;
+	margin-bottom: 16px;
+	font-size: 13px;
+	color: var(--label);
 }
 
-.radio-body span {
-	width: 8px;
-	height: 8px;
-	background: #7e8797;
-	transition: background 0.2s ease;
-	will-change: background;
-	border-radius: 4px;
-	margin-right: 4px;
+.results td {
+	font-family: monospace;
 }
 
-.radio-input:checked + .radio-body {
-	background: var(--brand);
-	color: #fff;
-}
-
-.radio-input:checked + .radio-body span {
-	background: #ffffff;
+.add-entry,
+.struct-add,
+.struct-expand {
+	color: var(--brand);
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 16px;
 }
 
 .button {
@@ -401,6 +404,25 @@ html {
 
 .results-clear[disabled] {
 	display: none;
+}
+
+.pager {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 12px;
+	color: var(--textGray);
+}
+
+.results-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+}
+
+.pager .results-clear[disabled] {
+	display: inline;
+	visibility: hidden;
 }
 
 table {
@@ -697,23 +719,32 @@ table tbody td {
 	height: 120px;
 }
 
-.bookmarks {
-	padding: 0 8px;
+.table-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
 }
 
-.bookmarks tr td {
-	width: 80px;
+#table input[type="text"],
+#globals input[type="text"] {
+	width: 100%;
+	min-width: 60px;
+	font-family: monospace;
+	background: none;
+	border: 1px solid var(--lightBackground);
+	color: inherit;
 }
 
-.bookmarks tr td:nth-child(3),
-.bookmarks tr td:nth-child(4),
-.bookmarks tr td:nth-child(5) {
-	width: 100px;
-	text-align: center;
+#hits tr[data-func] {
+	cursor: pointer;
 }
 
-.bookmarks tr td:nth-child(6) {
-	width: 45px;
+.entry-remove {
+	color: #ff6b81;
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 16px;
 }
 
 .overlay {
@@ -766,4 +797,317 @@ table tbody td {
 
 .openSavePatchModalButton {
 	margin-right: 16px;
+}
+
+.patch-notice,
+.asm-error {
+	margin-top: 16px;
+	font-size: 13px;
+	color: #e84118;
+}
+
+.instance-header,
+.toast {
+	position: fixed;
+	left: 0;
+	right: 0;
+	z-index: 20;
+	padding: 4px 16px;
+	font-size: 11px;
+}
+
+.instance-header {
+	bottom: 0;
+	background: var(--lightBackground);
+	color: var(--label);
+}
+
+.toast {
+	z-index: 1000;
+	pointer-events: none;
+	bottom: 24px;
+	margin: 0 16px;
+	border-radius: 4px;
+	padding: 8px 12px;
+	background: #e84118;
+	color: #fff;
+	font-size: 13px;
+}
+
+.mem-nav .button {
+	flex: 0 0 auto;
+	width: auto;
+	padding: 10px 14px;
+}
+
+.mem-grid {
+	padding: 0 8px 32px;
+	outline: none;
+	user-select: none;
+	font-family: monospace;
+	font-size: 11px;
+}
+
+.mem-row {
+	display: grid;
+	grid-template-columns: 72px repeat(16, 1fr) 112px;
+	line-height: 18px;
+}
+
+.mem-row span {
+	cursor: pointer;
+	text-align: center;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mem-row span:hover {
+	background: var(--grayInactive);
+}
+
+.mem-addr {
+	color: var(--label);
+}
+
+.mem-ascii {
+	padding-left: 8px;
+	white-space: pre;
+}
+
+.mem-sink {
+	position: fixed;
+	left: -100px;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+}
+
+#memViewByteInput {
+	width: 100%;
+	font: inherit;
+	text-align: center;
+	color: inherit;
+	background: var(--brand);
+	border: none;
+}
+
+.instance-select {
+	position: fixed;
+	right: 124px;
+	bottom: 0;
+	z-index: 21;
+	max-width: 50%;
+	font-size: 11px;
+}
+
+.memory-select {
+	bottom: 24px;
+}
+
+.entry-memory {
+	margin-left: 4px;
+	font-size: 11px;
+	color: var(--label);
+}
+
+.table-actions .form-check,
+#functionFormSearch .form-check {
+	align-self: center;
+	margin: 0;
+}
+
+#watchPreciseNote {
+	align-self: center;
+	margin: 0;
+}
+
+.undo-button.input.button,
+.pause-button.input.button {
+	position: fixed;
+	right: 0;
+	bottom: 0;
+	z-index: 22;
+	width: auto;
+	margin: 0;
+	padding: 2px 10px;
+	font-size: 11px;
+}
+
+.pause-button.input.button {
+	right: 56px;
+	min-width: 64px;
+}
+
+#table tr.group {
+	cursor: pointer;
+	font-weight: 600;
+	background: var(--lightBackground);
+}
+
+#table tr.collapsed-member {
+	display: none;
+}
+
+#table .entry-length {
+	width: 56px;
+	background: none;
+	color: inherit;
+	border: 1px solid var(--lightBackground);
+}
+
+#table .entry-address {
+	min-width: 130px;
+}
+
+#table select,
+#table .entry-step {
+	max-width: 110px;
+	font-size: 12px;
+	background: none;
+	color: inherit;
+}
+
+#tableHashWarning {
+	margin-top: 8px;
+	color: #e84118;
+}
+
+.mem-nav {
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+.mem-nav .mem-small {
+	flex: 0 0 auto;
+	width: auto;
+	min-width: 56px;
+}
+
+.mem-count {
+	align-self: center;
+	color: var(--label);
+}
+
+.mem-title {
+	padding: 0 8px 4px;
+	font-size: 12px;
+	color: var(--brand);
+}
+
+.mem-row span.changed {
+	color: #ff6b81;
+}
+
+.mem-row span.selected,
+#memViewInspector tr.selected {
+	background: var(--grayInactive);
+}
+
+.mem-row span.bookmarked {
+	text-decoration: underline;
+}
+
+#memViewInspector tr,
+#memViewBookmarks tr[data-address],
+#structRows tr[data-offset] {
+	cursor: pointer;
+}
+
+#structRows tr.diff {
+	background: rgba(255, 107, 129, 0.2);
+}
+
+#structRows tr.struct-child td:first-child {
+	padding-left: calc(var(--depth) * 16px + 4px);
+}
+
+#structRows .struct-length {
+	width: 48px;
+	margin-left: 4px;
+}
+
+#structRows select,
+#structRows input,
+#memViewInspector input {
+	max-width: 110px;
+	font-family: monospace;
+	background: none;
+	border: 1px solid var(--lightBackground);
+	color: inherit;
+}
+
+.fn-list {
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.fn-title {
+	flex: 1 1 auto;
+}
+
+#functionList tr[data-index],
+#codeResults tr[data-func],
+#xrefResults tr[data-func] {
+	cursor: pointer;
+}
+
+.fn-args input {
+	width: 80px;
+	font-family: monospace;
+	background: none;
+	border: 1px solid var(--lightBackground);
+	color: inherit;
+}
+
+#tabScripts div.prism-live {
+	min-height: 160px;
+	margin: 12px 0;
+}
+
+.script-log {
+	max-height: 160px;
+	overflow-y: auto;
+	font-family: monospace;
+	font-size: 12px;
+	white-space: pre-wrap;
+}
+
+.script-log .error {
+	color: #e84118;
+}
+
+#scripts tr[data-name], #customTypes tr[data-name] {
+	cursor: pointer;
+}
+
+#jsResults input[type=text] {
+	width: 110px;
+	font-family: monospace;
+	background: none;
+	border: 1px solid var(--lightBackground);
+	color: inherit;
+}
+
+.patch-notice {
+	white-space: pre-line;
+}
+
+.patch-callback {
+	width: 100%;
+	min-height: 64px;
+	font-family: monospace;
+	resize: vertical;
+}
+
+.patch-name {
+	cursor: pointer;
+	text-decoration: underline dotted;
+}
+
+.search-hint {
+	font-size: 12px;
+	opacity: 0.75;
+	margin-bottom: 8px;
 }

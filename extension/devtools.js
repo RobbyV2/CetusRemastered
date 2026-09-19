@@ -14,7 +14,4 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-chrome.devtools.panels.create("Cetus",
-    "/icons/cetus48.png",
-    "/extension/devpanelview.html"
-);
+chrome.devtools.panels.create("Cetus Remastered", "/icons/cetus48.png", "/extension/popupview.html?devtools=1");

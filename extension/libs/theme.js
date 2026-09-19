@@ -50,29 +50,13 @@ const setColorScheme = function(type) {
     );
 };
 
-document.getElementById("toggleColorScheme").onclick = function() {
-    storageGet("colorScheme", function(result) {
-        const colorScheme = result.colorScheme;
-
-        if (colorScheme == "DARK") {
-            storageSet({colorScheme: "WHITE"});
-            setColorScheme("WHITE");
-        }
-        else {
-            storageSet({colorScheme: "DARK"});
-            setColorScheme("DARK");
-        }
-    });
+const toggleColorScheme = async () => {
+    const { colorScheme } = await chrome.storage.local.get("colorScheme");
+    const next = colorScheme === "WHITE" ? "DARK" : "WHITE";
+    chrome.storage.local.set({ colorScheme: next });
+    setColorScheme(next);
 };
 
-// Set the selected theme when the extension window opens
-storageGet("colorScheme", function(result) {
-        const colorScheme = result.colorScheme;
+document.getElementById("toggleColorScheme").onclick = toggleColorScheme;
 
-        if (colorScheme == "WHITE") {
-            setColorScheme("WHITE");
-        }
-        else {
-            setColorScheme("DARK");
-        }
-});
+chrome.storage.local.get("colorScheme").then(({ colorScheme }) => setColorScheme(colorScheme === "WHITE" ? "WHITE" : "DARK"));

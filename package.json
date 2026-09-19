@@ -1,0 +1,13 @@
+{
+  "name": "cetus-remastered",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/unit.test.js",
+    "e2e": "playwright test tests/e2e.spec.js --workers=1 --output=temp/pw",
+    "serve": "node tests/fixture.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

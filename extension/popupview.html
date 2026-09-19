@@ -2,11 +2,10 @@
 <html>
 
 <head>
-  <title>Cetus</title>
+  <title>Cetus Remastered</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" type="text/css" href="/extension/css/normalize.css">
   <link rel="stylesheet" type="text/css" href="/extension/css/styles.css">
-  <link rel="stylesheet" type="text/css" href="/extension/css/popup.css">
   <link rel="stylesheet" type="text/css" href="/extension/css/prism.css">
   <link rel="stylesheet" type="text/css" href="/extension/css/prism-live.css">
   <link rel="stylesheet" type="text/css" href="/extension/css/prism-line-highlight.css">
@@ -28,9 +27,13 @@
         </div>
       </div>
       <input type="text" value="" id="patchName" class="input" placeholder="Patch Name">
+      <label class="form-field">Processor (JavaScript run with the WAIL parser as <code>processor</code> before parsing)
+        <textarea id="patchProcessor" class="input patch-callback" rows="4" spellcheck="false"></textarea></label>
+      <label class="form-field">Preinstantiate
+        (JavaScript run with <code>module</code> bytes and <code>importObject</code>)
+        <textarea id="patchPreinstantiate" class="input patch-callback" rows="4" spellcheck="false"></textarea></label>
       <div class="modal-row">
-        <button class="input button" id="functionFormSave">Save Patch</button>
-        <!-- <button class="input button button--text">Override</button> -->
+        <button class="input button" id="savePatchButton">Save Patch</button>
       </div>
     </div>
   </div>
@@ -39,7 +42,7 @@
     <div class="modal-space"></div>
     <div class="modal-inner">
       <div class="modal-row">
-        <div class="modal-title">Load Patch</div>
+        <div class="modal-title">Patches</div>
         <div class="modal-close" id="closeLoadPatchModalButton">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
@@ -51,43 +54,31 @@
       <table class="modal-table" id="loadedPatchesTable"></table>
     </div>
   </div>
-  <div class="modal modal--load-patch modal-hidden" id="stackTraceModal">
-    <div class="modal-overlay"></div>
-    <div class="modal-space"></div>
-    <div class="modal-inner">
-      <div class="modal-row">
-        <div class="modal-title">Stack Trace</div>
-        <div class="modal-close" id="closeStackTraceModalButton">
-        </div>
-      </div>
-      <table class="modal-table" id="stackTraceTable"></table>
-    </div>
-  </div>
   <div id="lockOverlay" class="overlay">
     <div class="overlay-container">
-      <div>Waiting for WASM</div>
+      <div>Waiting for WebAssembly</div>
       <div class="openSavePatchModalButton" id="overlayLoadPatchModalButton">Show Patches</div>
     </div>
   </div>
+  <div id="errorToast" class="toast" hidden></div>
+  <div id="instanceHeader" class="instance-header"></div>
+  <select id="instanceSelect" class="instance-select" hidden></select>
+  <select id="memorySelect" class="instance-select memory-select" title="Memory used by scans, the hex view and new table entries" hidden></select>
+  <button type="button" id="undoButton" class="input button button--text undo-button" title="Undo the last write (Ctrl+Z)">Undo</button>
+  <button type="button" id="pauseButton" class="input button button--text pause-button" title="Pause or resume the game (Alt+Shift+P)">Pause</button>
   <div class="tabs">
-    <div class="tabs-item is-active" id="liTabSearch">
-      <a href="#" name="tabButton" id="tabSearchButton">Search</a>
-    </div>
-    <div class="tabs-item" id="liTabStrings">
-      <a href="#" name="tabButton" id="tabStringsButton">Strings</a>
-    </div>
-    <div class="tabs-item" id="liTabPatch">
-      <a href="#" name="tabButton" id="tabPatchButton">Patch</a>
-    </div>
-    <div class="tabs-item" id="liTabSpeedHack">
-      <a href="#" name="tabButton" id="tabSpeedHackButton">Speed Hack</a>
-    </div>
-    <div class="tabs-item" id="liTabBookmarks">
-      <a href="#" name="tabButton" id="tabBookmarksButton">Bookmarks</a>
-    </div>
-    <div class="tabs-item" id="liTabMemView">
-      <a href="#" name="tabButton" id="tabMemViewButton">Memory View</a>
-    </div>
+    <div class="tabs-item is-active"><a href="#" id="tabSearchButton">Search</a></div>
+    <div class="tabs-item"><a href="#" id="tabStringsButton">Strings</a></div>
+    <div class="tabs-item"><a href="#" id="tabTableButton">Table</a></div>
+    <div class="tabs-item"><a href="#" id="tabMemViewButton">Memory</a></div>
+    <div class="tabs-item"><a href="#" id="tabStructButton">Struct</a></div>
+    <div class="tabs-item"><a href="#" id="tabPointerButton">Pointers</a></div>
+    <div class="tabs-item"><a href="#" id="tabPatchButton">Patch</a></div>
+    <div class="tabs-item"><a href="#" id="tabExportsButton">Exports</a></div>
+    <div class="tabs-item"><a href="#" id="tabScriptsButton">Scripts</a></div>
+    <div class="tabs-item"><a href="#" id="tabJsButton">JS</a></div>
+    <div class="tabs-item"><a href="#" id="tabGlobalsButton">Globals</a></div>
+    <div class="tabs-item"><a href="#" id="tabSpeedHackButton">Speed</a></div>
     <div class="tabs-item">
       <div class="toggleColorScheme" id="toggleColorScheme">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -98,263 +89,151 @@
   </div>
   <div id="tabSearch" class="tabs-content">
     <div class="container">
-        <form id="searchForm" class="form compare-form">
-          <label class="form-field">
-            Value (Empty for Differential Search)
-            <input type="text" id="searchParam" name="param" value="" class="input" placeholder="Enter value">
-          </label>
-
-          <div class="form-field">
-            Comparison Operator
-            <div class="form-field--group">
-              <div class="radio">
-                <input type="radio" name="compare" value="eq" class="radio-input" checked>
-                <div class="radio-body">
-                  <span></span>
-                  EQ
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="compare" value="ne" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  NE
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="compare" value="lt" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  LT
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="compare" value="gt" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  GT
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="compare" value="lte" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  LTE
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="compare" value="gte" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  GTE
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="form-field">
-            Value Type
-            <div class="form-field--group">
-              <div class="radio">
-                <input type="radio" name="type" value="i8" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  i8
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="type" value="i16" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  i16
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="type" value="i32" class="radio-input" checked>
-                <div class="radio-body">
-                  <span></span>
-                  i32
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="type" value="i64" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  i64
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="type" value="f32" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  f32
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="type" value="f64" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  f64
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="type" value="ascii" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  ascii
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="type" value="utf-8" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  utf-8
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="type" value="bytes" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  bytes
-                </div>
-              </div>
-              <!-- FIXME This is extremely hacky -->
-              <div class="radio">
-              </div>
-              <div class="radio">
-              </div>
-              <div class="radio">
-              </div>
-            </div>
-          </div>
-          <div class="form-field">
-            Only Aligned Addresses? (Faster but less accurate)
-            <div class="form-field--group">
-              <div class="radio">
-                <input type="radio" name="alignment" value="aligned" class="radio-input" checked>
-                <div class="radio-body">
-                  <span></span>
-                  yes
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="alignment" value="unaligned" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  no
-                </div>
-              </div>
-              <!-- FIXME This is extremely hacky -->
-              <div class="radio">
-              </div>
-              <div class="radio">
-              </div>
-              <div class="radio">
-              </div>
-              <div class="radio">
-              </div>
-            </div>
-          </div>
-          <div class="form-field">
-            Range
-            <div class="form-field--group">
-              <input type="text" id="searchLower" name="lower" placeholder="From 0" class="input">
-              <input type="text" id="searchUpper" name="upper" placeholder="To 0xFFFFFFFF" class="input">
-            </div>
-          </div>
-          <button type="submit" name="search" class="input button" value="Submit">Search</button>
-        </form>
-    </div>
-    <div>
-      <div class="container">
-        <div class="restart-container">
-          <div id="resultsTitle" class="results-count"></div>
-          <button id="restartBtn" class="results-clear" disabled>Restart Search</button>
+      <form id="searchForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Type<select id="searchType" class="input"></select></label>
+          <label class="form-field">Compare<select id="searchCompare" class="input"></select></label>
         </div>
-      </div>
-      <div class="results" id="results"></div>
+        <div class="form-field--group">
+          <label class="form-field">Value<input type="text" id="searchParam" class="input" placeholder="Enter value" autocomplete="off"></label>
+          <label class="form-field" id="searchValue2Field">And<input type="text" id="searchValue2" class="input" placeholder="Upper value" autocomplete="off"></label>
+          <label class="form-field" id="searchToleranceField">Tolerance<input type="text" id="searchTolerance" class="input" placeholder="0"></label>
+        </div>
+        <div class="form-field--group">
+          <label class="form-field" id="searchRoundingField">Float match<select id="searchRounding" class="input"><option value="tolerance">Tolerance</option><option value="truncated">Truncated</option></select></label>
+          <label class="form-field" id="searchBaseField">Compare with<select id="searchBase" class="input"><option value="previous">Previous scan</option><option value="first">First scan</option></select></label>
+        </div>
+        <div class="form-field">Range
+          <div class="form-field--group">
+            <input type="text" id="searchLower" placeholder="From 0" class="input">
+            <input type="text" id="searchUpper" placeholder="To end of memory" class="input">
+          </div>
+        </div>
+        <label class="form-check"><input type="checkbox" id="searchAligned" checked> Aligned addresses only</label>
+        <label class="form-check"><input type="checkbox" id="searchNot"> Not (invert the comparison)</label>
+        <label class="form-check"><input type="checkbox" id="searchPause"> Pause the game while scanning</label>
+        <div id="searchGroupHint" class="search-hint" hidden>Group: <code>type:value</code> elements separated by spaces, each placed right after the previous one. Types: 1 2 4 8 (integer bytes), f (float), d (double) or any type name; <code>*</code> matches any value; append <code>@offset</code> to place an element. Example: <code>4:100 4:* f:1.5</code></div>
+        <label class="form-check" id="searchCaseField"><input type="checkbox" id="searchCaseSensitive" checked> Case sensitive</label>
+        <button type="submit" id="searchButton" class="input button">First Scan</button>
+      </form>
     </div>
+    <div class="container restart-container">
+      <div id="resultsTitle" class="results-count"></div>
+      <button type="button" id="scanUndo" class="results-clear" disabled>Undo Scan</button>
+      <button type="button" id="restartBtn" class="results-clear" disabled>New Scan</button>
+    </div>
+    <div class="container results-actions" id="scanSaveRow" hidden><input type="text" id="scanSaveName" class="input" placeholder="Saved scan name" maxlength="40"><button type="button" id="scanSave" class="results-clear" disabled>Save Scan</button></div>
+    <div class="container pager"><button type="button" id="resultsPrev" class="results-clear" disabled>Previous</button><span id="resultsPage"></span><button type="button" id="resultsNext" class="results-clear" disabled>Next</button></div>
+    <div class="container results-actions"><button type="button" id="resultsAddSelected" class="results-clear" disabled>Add Selected</button><button type="button" id="resultsAddAll" class="results-clear" disabled>Add All</button></div>
+    <div class="results" id="results"></div>
   </div>
-  <div id="tabStrings" style="display: none" class="tabs-content">
+  <div id="tabStrings" class="tabs-content" hidden>
     <div class="container">
-        <form id="stringForm" class="form compare-form">
-          <label class="form-field">
-            Minimum String Length
-            <input type="text" id="strMinLength" name="minLength" value="" class="input" placeholder="4">
-          </label>
-          <div class="form-field">
-            String Type
-            <div class="form-field--group">
-              <div class="radio">
-                <input type="radio" name="stringType" value="ascii" class="radio-input" checked>
-                <div class="radio-body">
-                  <span></span>
-                  ascii
-                </div>
-              </div>
-              <div class="radio">
-                <input type="radio" name="stringType" value="utf-8" class="radio-input">
-                <div class="radio-body">
-                  <span></span>
-                  utf-8
-                </div>
-              </div>
-              <!-- FIXME This is extremely hacky -->
-              <div class="radio">
-              </div>
-              <div class="radio">
-              </div>
-              <div class="radio">
-              </div>
-              <div class="radio">
-              </div>
-            </div>
-          </div>
-          <div class="form-field">
-            Range
-            <div class="form-field--group">
-              <input type="text" id="strSearchLower" name="lower" placeholder="From 0" class="input">
-              <input type="text" id="strSearchUpper" name="upper" placeholder="To 0xFFFFFFFF" class="input">
-            </div>
-          </div>
-          <button type="submit" name="stringSearch" class="input button" value="Submit">Search</button>
-        </form>
-    </div>
-    <div>
-      <div class="container">
-        <div class="restart-container">
-          <div id="strResultsTitle" class="results-count"></div>
+      <form id="stringForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Encoding<select id="strEncoding" class="input"><option value="ascii">ascii</option><option value="utf16">utf16</option><option value="utf8">utf8</option></select></label>
+          <label class="form-field">Minimum length<input type="text" id="strMinLength" value="4" class="input"></label>
         </div>
-      </div>
-      <div class="results" id="stringResults"></div>
+        <div class="form-field">Range
+          <div class="form-field--group">
+            <input type="text" id="strSearchLower" placeholder="From 0" class="input">
+            <input type="text" id="strSearchUpper" placeholder="To end of memory" class="input">
+          </div>
+        </div>
+        <button type="submit" id="strSearchButton" class="input button">Search</button>
+      </form>
     </div>
+    <div class="container restart-container">
+      <div id="strResultsTitle" class="results-count"></div>
+    </div>
+    <div class="container pager"><button type="button" id="strResultsPrev" class="results-clear" disabled>Previous</button><span id="strResultsPage"></span><button type="button" id="strResultsNext" class="results-clear" disabled>Next</button></div>
+    <div class="container results-actions"><button type="button" id="strResultsAddSelected" class="results-clear" disabled>Add Selected</button><button type="button" id="strResultsAddAll" class="results-clear" disabled>Add All</button></div>
+    <div class="results" id="stringResults"></div>
   </div>
-  <div id="tabPatch" style="display:none" class="tabs-content">
+  <div id="tabPatch" class="tabs-content" hidden>
     <div class="container">
       <div>
+        <div class="form-field--group mem-nav">
+          <input type="text" id="functionFilter" class="input" placeholder="Filter functions" autocomplete="off">
+          <button type="button" id="dumpOriginal" class="input button">Dump original</button>
+          <button type="button" id="dumpInstrumented" class="input button">Dump instrumented</button>
+        </div>
+        <div class="results fn-list" id="functionList"></div>
+        <form id="codeSearchForm" class="form-field--group mem-nav">
+          <select id="codeSearchMode" class="input mem-small"><option value="text">Text</option><option value="aob">Bytes</option></select>
+          <input type="text" id="codeSearchQuery" class="input" placeholder="Regex or byte pattern" autocomplete="off">
+          <button type="submit" id="codeSearchButton" class="input button">Search code</button>
+        </form>
+        <div id="codeResultsTitle" class="results-count"></div>
+        <div class="results fn-list" id="codeResults"></div>
         <form id="functionFormSearch">
           <label class="form-field">
-            Search for functions
-            <input type="text" id="functionInput" value="" class="input">
+            Function index
+            <input type="text" id="functionInput" value="" class="input" autocomplete="off">
           </label>
-          <input type="submit" id="functionSearchButton" class="button" value="Find a function" />
+          <input type="submit" id="functionSearchButton" class="button" value="Open function" />
+          <label class="form-check"><input type="checkbox" class="fn-trace" disabled> Trace calls (applies after a reload)</label>
+          <label class="form-check"><input type="checkbox" class="fn-steptrace" disabled> Step trace (applies after a reload)</label>
         </form>
-        <form id="functionFormSave">
-          <div class="patch-controls">
-<!--
-TODO Rename these classes
--->
-            <div class="openSavePatchModalButton" id="openSavePatchModalButton">Save Patch</div>
-            <div class="openSavePatchModalButton" id="openLoadPatchModalButton">Show Patches</div>
-            <div class="openLoadPatchModalButton" id="importPatchButton">Import Patch</div>
-          </div>
-          <textarea class="prism-live language-wasm line-numbers" id="codeDisassembly"></textarea>
-          <input type="hidden" id="functionIndexSaved" value="" />
-        </form>
+        <div id="patchNotice" class="patch-notice" hidden></div>
+        <div class="patch-controls">
+          <div class="openSavePatchModalButton" id="openSavePatchModalButton">Save Patch</div>
+          <div class="openLoadPatchModalButton" id="openLoadPatchModalButton">Show Patches</div>
+        </div>
+        <div class="form-field--group mem-nav">
+          <select id="patchTemplate" class="input mem-small"><option value="">Template</option><option value="nop">Do nothing</option><option value="return">Return value</option><option value="original">Original code</option></select>
+          <input type="text" id="patchTemplateValue" class="input mem-small" placeholder="Value" value="0" autocomplete="off">
+          <input type="text" id="codeCommentText" class="input" placeholder="Comment" autocomplete="off">
+          <button type="button" id="codeComment" class="input button">Comment line</button>
+          <button type="button" id="codeNop" class="input button" title="Replace the selected instruction with a stack-neutral one and save it as a patch">NOP line</button>
+          <button type="button" id="codeAccesses" class="input button"
+            title="List the addresses the selected load or store accesses">Accesses</button>
+          <button type="button" id="codeBreakpoint" class="input button"
+            title="Count hits of the selected instruction (applies after a reload)">Breakpoint</button>
+        </div>
+        <div class="form-field--group mem-nav">
+          <div id="functionTitle" class="mem-title fn-title"></div>
+          <button type="button" id="codeBack" class="input button" title="Back to the calling function" disabled>Back</button>
+          <button type="button" id="xrefsButton" class="input button" title="List callers and table entries" disabled>Callers</button>
+        </div>
+        <div id="xrefResultsTitle" class="results-count"></div>
+        <div class="results fn-list" id="xrefResults"></div>
+        <div id="asmError" class="asm-error" hidden></div>
+        <textarea class="prism-live language-wasm line-numbers" id="codeDisassembly" spellcheck="false"></textarea>
+        <div class="results fn-list" id="codeAccessResults"></div>
+        <div class="results fn-list" id="stepTrace"></div>
       </div>
     </div>
+    <div class="results" id="traceLog"></div>
+    <div class="container">
+      <div class="form-field--group mem-nav">
+        <div class="mem-title">Breakpoints</div>
+        <span id="breakpointNote" class="patch-notice" hidden>Reload the game to apply</span>
+      </div>
+    </div>
+    <div class="results fn-list" id="breakpoints"></div>
+    <div class="container">
+      <div class="form-field--group mem-nav">
+        <label class="form-check"><input type="checkbox" id="coverageOn"> Count function calls</label>
+        <span id="coverageNote" class="patch-notice" hidden>Reload the game to apply</span>
+      </div>
+      <div class="form-field--group mem-nav">
+        <button type="button" id="codeFilterStart" class="input button" title="Take every function as a candidate">New filter</button>
+        <button type="button" id="codeFilterExecuted" class="input button" title="Keep functions called since the last step">Executed</button>
+        <button type="button" id="codeFilterNotExecuted" class="input button" title="Keep functions not called since the last step">Not executed</button>
+        <button type="button" id="codeFilterReset" class="input button">Reset</button>
+        <span id="codeFilterCount" class="results-count"></span>
+      </div>
+    </div>
+    <div class="results fn-list" id="codeFilterResults"></div>
   </div>
-</div>
-  <div id="tabSpeedHack" style="display:none" class="tabs-content">
+  <div id="tabExports" class="tabs-content" hidden>
+    <div class="container">
+      <input type="text" id="exportsFilter" class="input" placeholder="Filter functions" autocomplete="off">
+    </div>
+    <div class="results" id="exports"></div>
+  </div>
+  <div id="tabSpeedHack" class="tabs-content" hidden>
       <div class="container">
         <div>
           <div class="speedometer">
@@ -463,7 +342,7 @@ TODO Rename these classes
             <div class="slider-input--line"></div>
             <div class="slider-input--line"></div>
             <div class="slider-input--line"></div> -->
-            <input type="range" id="shRange" name="volume" min="0" max="10" value="2">
+            <input type="range" id="shRange" min="0.1" max="16" step="0.05" value="2">
             <div class="slider-inner">
               <div class="slider-inner-fill" id="slider-item-fill"></div>
             </div>
@@ -474,45 +353,227 @@ TODO Rename these classes
       </div>
     </div>
   </div>
-  <div id="tabBookmarks" style="display:none" class="tabs-content">
-    <div>
-      <div id="bookmarks">
-        <div id="bookmark-table"></div>
-        <div class="nothing-to-show">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g opacity="0.2">
-              <path d="M12.4856 16.6814L12 16.4116L11.5144 16.6814L5 20.3005V4C5 3.44772 5.44772 3 6 3H18C18.5523 3 19 3.44771 19 4L19 20.3005L12.4856 16.6814Z" stroke="#A4B0BE" stroke-width="2"></path>
-              <path d="M8.28015 9.32038C7.90662 9.69572 7.90662 10.3043 8.28015 10.6796L10.3092 12.7185C10.6827 13.0938 11.2883 13.0938 11.6618 12.7185L15.7199 8.64075C16.0934 8.26541 16.0934 7.65685 15.7199 7.28151C15.3463 6.90616 14.7407 6.90616 14.3672 7.28151L10.9855 10.6796L9.63282 9.32038C9.25929 8.94503 8.65368 8.94503 8.28015 9.32038Z" fill="#A4B0BE"></path>
-            </g>
-          </svg>
-          There is nothing to show right now
-          <span>Use the Search tab first</span>
+  <div id="tabTable" class="tabs-content" hidden>
+    <div class="container">
+      <form id="tableAddForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Address or pointer<input type="text" id="tableAddAddress" class="input" placeholder="0x00000000 or [0x300] + 0x10" autocomplete="off"></label>
+          <label class="form-field">Type<select id="tableAddType" class="input"></select></label>
+          <label class="form-field" hidden>Length<input type="number" id="tableAddLength" class="input" min="1" value="16"></label>
         </div>
+        <button type="submit" id="tableAddButton" class="input button">Add Address</button>
+      </form>
+      <div class="table-actions">
+        <button type="button" id="tableExport" class="input button button--text">Export</button>
+        <button type="button" id="tableExportUserscript" class="input button button--text">Export trainer</button>
+        <label class="input button button--text">Import<input type="file" id="tableImport" accept=".json,application/json" hidden></label>
+        <button type="button" id="openTab" class="input button button--text" title="Keep the UI open while picking a file">Open in tab</button>
+        <label class="form-check"><input type="checkbox" id="watchPrecise"> Precise write watches</label>
+        <span id="watchPreciseNote" class="patch-notice" hidden>Reload the game to apply</span>
+        <label class="form-check" title="Pause in the page debugger (DevTools open) when a watch fires"><input type="checkbox" id="watchBreak"> Break on hit</label>
       </div>
-      <div id="stack-traces" class="message-body">
+      <div id="freezesSuspended" class="patch-notice" hidden>All freezes are suspended <button type="button" id="resumeFreezes" class="input button button--text">Resume</button></div>
+      <div id="tableHashWarning" class="patch-notice" hidden>This table was made for a different build of the game. Addresses may be wrong. <button type="button" id="tableHashAccept" class="input button button--text">Use this build</button></div>
+    </div>
+    <div class="results" id="table"></div>
+    <div class="container">
+      <form id="tableBulkForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Selected entries<input type="text" id="tableBulkValue" class="input" placeholder="Value" autocomplete="off"></label>
+        </div>
+        <div class="table-actions">
+          <button type="submit" id="tableBulkSet" class="input button button--text">Set value</button>
+          <button type="button" id="tableBulkFreeze" class="input button button--text">Freeze</button>
+          <button type="button" id="tableBulkRemove" class="input button button--text">Remove</button>
+        </div>
+      </form>
+    </div>
+    <div class="container">
+      <form id="hotkeyForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Keys<input type="text" id="hotkeyCombo" class="input" placeholder="Ctrl+Shift+F" autocomplete="off"></label>
+          <label class="form-field">Action<select id="hotkeyAction" class="input">
+            <option value="toggleFreeze">Toggle freeze</option>
+            <option value="set">Set value</option>
+            <option value="inc">Increase by</option>
+            <option value="dec">Decrease by</option>
+            <option value="toggleSpeed">Toggle speedhack</option>
+            <option value="toggleFreezes">Suspend all freezes</option>
+            <option value="togglePause">Pause or resume the game</option>
+            <option value="setSpeed">Set speed</option>
+            <option value="freeze">Freeze</option>
+            <option value="unfreeze">Unfreeze</option>
+            <option value="toggleGroup">Toggle group freeze</option>
+            <option value="toggleScript">Toggle script</option>
+            <option value="nextScan">Next scan</option>
+            <option value="undoScan">Undo scan</option>
+          </select></label>
+          <label class="form-field">Entry<select id="hotkeyEntry" class="input"></select></label>
+          <label class="form-field" hidden>Group<select id="hotkeyGroup" class="input"></select></label>
+          <label class="form-field" hidden>Script<select id="hotkeyScript" class="input"></select></label>
+          <label class="form-field" hidden>Compare<select id="hotkeyCompare" class="input"></select></label>
+          <label class="form-field">Value<input type="text" id="hotkeyValue" class="input" placeholder="1" autocomplete="off"></label>
+        </div>
+        <button type="submit" id="hotkeyAdd" class="input button">Add Hotkey</button>
+      </form>
+    </div>
+    <div class="results" id="hotkeys"></div>
+    <div class="container restart-container"><div class="results-count">Accesses</div></div>
+    <div class="results" id="hits"></div>
+    <div class="results" id="hitStack"></div>
+    <div class="results" id="hitLocals"></div>
+    <div class="results" id="accesses"></div>
+  </div>
+  <div id="tabScripts" class="tabs-content" hidden>
+    <div class="container">
+      <form id="scriptForm" class="form">
+        <label class="form-field">Name<input type="text" id="scriptName" class="input" autocomplete="off"></label>
+        <textarea class="prism-live language-clike line-numbers" id="scriptCode" spellcheck="false"></textarea>
+        <button type="submit" id="scriptSave" class="input button">Save Script</button>
+      </form>
+    </div>
+    <div class="results" id="scripts"></div>
+    <div class="results script-log" id="scriptLog"></div>
+    <div class="container restart-container"><div class="results-count">Types</div></div>
+    <div class="container">
+      <form id="customTypeForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Name<input type="text" id="customTypeName" class="input" autocomplete="off"></label>
+          <label class="form-field">Size<input type="number" id="customTypeSize" class="input" min="1" max="16" value="4"></label>
+        </div>
+        <label class="form-field">Decode (bytes: Uint8Array to number)<textarea id="customTypeDecode" class="input patch-callback" rows="2" spellcheck="false"
+          placeholder="new DataView(bytes.buffer).getInt32(0, true) ^ 0x5A5A5A5A"></textarea></label>
+        <label class="form-field">Encode (value: number to byte array)<textarea id="customTypeEncode" class="input patch-callback" rows="2" spellcheck="false"
+          placeholder="(b => (new DataView(b.buffer).setInt32(0, value ^ 0x5A5A5A5A, true), [...b]))(new Uint8Array(4))"></textarea></label>
+        <button type="submit" id="customTypeSave" class="input button">Save Type</button>
+      </form>
+    </div>
+    <div class="results" id="customTypes"></div>
+  </div>
+  <div id="tabJs" class="tabs-content" hidden>
+    <div class="container">
+      <form id="jsForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Compare<select id="jsCompare" class="input"></select></label>
+          <label class="form-field">Value<input type="text" id="jsValue" class="input" autocomplete="off"></label>
+        </div>
+        <button type="submit" id="jsScanButton" class="input button">Scan</button>
+      </form>
+    </div>
+    <div class="results" id="jsFrozen"></div>
+    <div class="container restart-container">
+      <div id="jsCount" class="results-count"></div>
+      <button type="button" id="jsResetButton" class="results-clear">New Scan</button>
+    </div>
+    <div class="results" id="jsResults"></div>
+  </div>
+  <div id="tabGlobals" class="tabs-content" hidden>
+    <div id="globalsHashWarning" class="patch-notice" hidden></div>
+    <div class="results" id="globals"></div>
+    <span id="globalWatchNote" class="patch-notice" hidden>Reload the game to apply</span>
+    <div class="results" id="globalHits"></div>
+  </div>
+  <div id="tabMemView" class="tabs-content" hidden>
+    <div class="container">
+      <form id="memViewForm" class="form-field--group mem-nav">
+        <input type="text" id="memViewStartAddress" value="0x00000000" class="input" placeholder="0x00000000" autocomplete="off">
+        <button type="submit" id="memViewGo" class="input button">Go</button>
+        <select id="memViewPageSize" class="input mem-small"><option>512</option><option>1024</option><option>4096</option></select>
+        <select id="memViewDisplay" class="input mem-small" title="Display type of the hex grid">
+          <option value="u8">Bytes (hex)</option><option value="i16">i16</option><option value="u16">u16</option>
+          <option value="i32">i32</option><option value="u32">u32</option><option value="i64">i64</option>
+          <option value="f32">f32</option><option value="f64">f64</option><option value="hex32">u32 hex</option>
+        </select>
+      </form>
+      <form id="memViewPageForm" class="form-field--group mem-nav">
+        <button type="button" id="memViewPrevPage" class="input button">&lt;</button>
+        <input type="text" id="memViewPage" value="1" class="input mem-small" autocomplete="off">
+        <span id="memViewPageCount" class="mem-count"></span>
+        <button type="button" id="memViewNextPage" class="input button">&gt;</button>
+        <button type="button" id="memViewFollow" class="input button" title="Go to the u32 pointer at the selected byte">Follow</button>
+        <button type="button" id="memViewBack" class="input button" disabled>Back</button>
+      </form>
+      <div class="form-field--group mem-nav">
+        <button type="button" id="memViewAddEntry" class="input button">Add to table</button>
+        <input type="text" id="memViewBookmarkLabel" class="input" placeholder="Bookmark label" autocomplete="off">
+        <button type="button" id="memViewBookmark" class="input button">Bookmark</button>
+        <select id="memDumpRange" class="input mem-small"><option value="all">Whole memory</option><option value="page">Visible page</option></select>
+        <button type="button" id="memDump" class="input button">Dump</button>
+      </div>
+      <form id="memFindForm" class="form-field--group mem-nav">
+        <select id="memFindType" class="input mem-small"></select>
+        <input type="text" id="memFindQuery" class="input" placeholder="Find value or bytes" autocomplete="off">
+        <button type="submit" id="memFind" class="input button">Find</button>
+        <button type="button" id="memFindNext" class="input button">Next</button>
+      </form>
+      <form id="memFillForm" class="form-field--group mem-nav">
+        <input type="text" id="memFillLength" class="input mem-small" placeholder="Length" value="16" autocomplete="off">
+        <input type="text" id="memFillBytes" class="input" placeholder="Fill bytes (hex)" value="00" autocomplete="off">
+        <button type="submit" id="memFill" class="input button" title="Write the bytes repeatedly from the selected byte">Fill</button>
+      </form>
+      <form id="memSnapForm" class="form-field--group mem-nav" title="Snapshots hold memory and every mutable numeric global for this page session; they are lost on reload">
+        <input type="text" id="snapName" class="input" placeholder="Snapshot name" autocomplete="off">
+        <button type="submit" id="snapSave" class="input button">Save snapshot</button>
+        <input type="text" id="memLoadAddress" class="input mem-small" value="0" title="Load address" autocomplete="off">
+        <label class="input button" title="Write a file into memory at the load address (not undoable; save a snapshot first)">Load file<input type="file" id="memLoadFile" hidden></label>
+      </form>
+    </div>
+    <div id="memViewTitle" class="mem-title"></div>
+    <textarea id="memPasteSink" class="mem-sink" tabindex="-1" aria-hidden="true"></textarea>
+    <div id="memViewGrid" class="mem-grid" tabindex="0" title="Shift-click extends the selection; Ctrl+C copies it as hex, Ctrl+V pastes hex"></div>
+    <div class="results" id="memViewInspector"></div>
+    <div class="results" id="memViewBookmarks"></div>
+    <div class="results" id="snapshots" title="Snapshots last for this page session and are lost on reload"></div>
+  </div>
+  <div id="tabStruct" class="tabs-content" hidden>
+    <div class="container">
+      <form id="structForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Address<input type="text" id="structAddress" class="input" placeholder="0x00000000" autocomplete="off"></label>
+          <label class="form-field">Size<input type="text" id="structSize" value="64" class="input" autocomplete="off"></label>
+          <label class="form-field">Compare with<input type="text" id="structCompareAddress" class="input" placeholder="Optional" autocomplete="off"></label>
+        </div>
+        <button type="submit" id="structGo" class="input button">Dissect</button>
+      </form>
+      <div class="table-actions">
+        <input type="text" id="structName" class="input" placeholder="Structure name" autocomplete="off">
+        <button type="button" id="structSave" class="input button button--text">Save</button>
+        <select id="structLoad" class="input"></select>
       </div>
     </div>
+    <div class="results" id="structRows"></div>
   </div>
-  <div id="tabMemView" style="display:none" class="tabs-content">
-  <label class="form-field--group">
-	Address
-	  <input type="text" id="memViewStartAddress" name="memViewStartAddress" value="0x00000000" class="input" placeholder="0x00000000">
-	  <div class="button" style="flex: 0;" id="memViewPrevPage">&#60;</div>
-	  <div class="button" style="flex: 0;" id="memViewNextPage">&#62;</div>
-  </label>
-
-   <div id="toggleMemView" class="button" enabled="false">Enable</div>
-   <textarea id="memViewData" style="font-family: monospace; font-size: 11px; width: 700px; height: 600px;"></textarea>
+  <div id="tabPointer" class="tabs-content" hidden>
+    <div class="container">
+      <form id="ptrForm" class="form">
+        <div class="form-field--group">
+          <label class="form-field">Address<input type="text" id="ptrAddress" class="input" placeholder="0x00000000" autocomplete="off"></label>
+          <label class="form-field">Max depth<input type="text" id="ptrDepth" value="3" class="input" autocomplete="off"></label>
+          <label class="form-field">Max offset<input type="text" id="ptrOffset" value="4096" class="input" autocomplete="off"></label>
+          <label class="form-field">Type<select id="ptrType" class="input"></select></label>
+        </div>
+        <button type="submit" id="ptrScan" class="input button">Pointer Scan</button>
+      </form>
+    </div>
+    <div class="container restart-container">
+      <div id="ptrCount" class="results-count"></div>
+      <button type="button" id="ptrRescan" class="results-clear" disabled title="Keeps chains that resolve to Address, or to an address holding Rescan value (Type) when it is set">Rescan</button>
+    </div>
+    <div class="container form-field--group">
+      <label class="form-field">Rescan value<input type="text" id="ptrRescanValue" class="input" placeholder="Empty: use Address" autocomplete="off"></label>
+      <label class="form-field">Max level<input type="text" id="ptrMaxLevel" class="input" placeholder="Any" autocomplete="off"></label>
+      <label class="form-field">Base<select id="ptrBaseFilter" class="input"><option value="">All</option><option value="static">Static</option><option value="global">Global</option></select></label>
+    </div>
+    <div class="container pager"><button type="button" id="ptrPrev" class="results-clear" disabled>Previous</button><span id="ptrPage"></span><button type="button" id="ptrNext" class="results-clear" disabled>Next</button></div>
+    <div class="container results-actions"><button type="button" id="ptrAddAll" class="results-clear" disabled title="Adds every chain that matches the filters (at most 500)">Add Filtered</button><button type="button" id="ptrResultsAddSelected" class="results-clear" disabled>Add Selected</button><button type="button" id="ptrResultsAddAll" class="results-clear" disabled>Add All</button></div>
+    <div class="results" id="ptrResults"></div>
   </div>
 </body>
-<script src="/shared/wail.min.js/wail.min.js"></script>
 <script src="/shared/utils.js"></script>
 
 <script src="/extension/libs/theme.js"></script>
 <script src="/extension/libs/navigation.js"></script>
-<script src="/extension/libs/patch.js"></script>
 <script src="/extension/libs/assembler.js"></script>
-<script src="/extension/libs/disassembler.js"></script>
 
 <script src="/extension/thirdparty/bliss/bliss.js"></script>
 <script src="/extension/thirdparty/prism/prism.js"></script>

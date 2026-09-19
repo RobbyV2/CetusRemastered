@@ -14,124 +14,75 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Listen for messages from web page and pass them along to extension
-window.addEventListener("cetusMsgIn", function(msg) {
-    chrome.runtime.sendMessage(msg.detail);
-}, false);
+(() => {
+  const pending = new Map(), EVENTS = ["init", "hits", "reset", "accesses", "traces", "hotkey", "command", "scriptLog", "scriptError", "instances"];
+  let seq = 0, live = false, config = null, src = null, asked = false;
+  const out = detail => dispatchEvent(new CustomEvent("cetusMsgOut", { detail }));
+  const sendSrc = () => src && out(JSON.stringify({ type: "workerSource", body: { src } }));
+  const want = () => asked || (asked = true, chrome.runtime.sendMessage({ type: "src" })
+    .then(s => typeof s === "string" ? sendSrc(src = s) : asked = false, () => asked = false));
+  const sendConfig = () => config && (out(JSON.stringify({ type: "config", body: config })), sendSrc());
+  let chain = Promise.resolve();
+  const update = (name, f) => chain = chain.then(async () => {
+    const site = location.host + location.pathname, all = (await chrome.storage.local.get(name))[name], list = all?.[site];
+    if (Array.isArray(list)) await chrome.storage.local.set({ [name]: { ...all, [site]: list.map(f) } });
+  }).catch(() => {});
+  const persist = b => {
+    const fs = b.entries ?? (b.entry ? [b] : []), same = (e, k) => e?.type === k?.type && (e.memory ?? 0) === (k.memory ?? 0)
+      && (k.pointer != null ? JSON.stringify(e.pointer) === JSON.stringify(k.pointer) : e.pointer == null && e.address === k.address);
+    if (fs.length) update("cheatTables", e => (f => f ? { ...e, frozen: !!f.frozen, freezeValue: f.frozen ? f.value : null } : e)(fs.find(f => same(e, f.entry))));
+    if (typeof b.script === "string") update("scripts", s => s?.name === b.script ? { ...s, enabled: !!b.enabled } : s);
+  };
 
-// Listn for messages from extension and pass them along to web page
-chrome.runtime.onMessage.addListener(function(msg) {
-    const evt = new CustomEvent("cetusMsgOut", { detail: JSON.stringify(msg) } );
+  addEventListener("cetusMsgIn", e => {
+    const d = e.detail;
+    let m;
+    if (typeof d !== "string" || d.length > 16777216) return;
+    try { m = JSON.parse(d); } catch { return; }
+    if (m?.id != null) return pending.get(m.id)?.(d), pending.delete(m.id);
+    if (m?.type === "ready") return sendConfig();
+    if (m?.type === "needSource") return void want();
+    if (!EVENTS.includes(m?.type)) return;
+    live = m.type !== "reset";
+    if (m.type === "hotkey" && m.body && m.body.error == null) persist(m.body);
+    try { chrome.runtime.sendMessage(d).catch(() => {}); } catch {}
+  });
 
-    window.dispatchEvent(evt);
-});
+  chrome.runtime.onMessage.addListener((msg, sender, respond) => {
+    let m;
+    try { m = JSON.parse(msg); } catch { return; }
+    if (typeof m?.type !== "string") return;
+    if (!live) return respond(JSON.stringify({ id: m.id, ok: false, error: "No WebAssembly instance in this frame" }));
+    pending.set(++seq, respond);
+    out(JSON.stringify({ id: seq, type: m.type, body: m.body }));
+    return true;
+  });
 
-const injectScript = function(scriptUrl) {
-    const newScript = document.createElement('script');
-
-    newScript.src = chrome.extension.getURL(scriptUrl);
-
-    //(document.head||document.documentElement).appendChild(newScript);
-    const injectElement = document.head || document.documentElement;
-    injectElement.insertBefore(newScript, injectElement.firstChild);
-    newScript.onload = function() {
-        newScript.parentNode.removeChild(newScript);
-    };
-};
-
-const injectCode = function(codeToExecute) {
-    const newScript = document.createElement('script');
-
-    newScript.innerHTML = codeToExecute;
-
-    const injectElement = document.head || document.documentElement;
-    injectElement.insertBefore(newScript, injectElement.firstChild);
-    newScript.onload = function() {
-        newScript.parentNode.removeChild(newScript);
-    };
-};
-
-const storageSet = function(valueObj) {
-    chrome.storage.local.set(valueObj);
-};
-
-const storageGet = function(key, callback) {
-    chrome.storage.local.get(key, callback);
-};
-
-// TODO Replace with utility function
-storageGet("savedPatches", function(result) {
-    if (result !== null) {
-        const savedPatches = result.savedPatches;
-
-        const injectPatches = [];
-
-        // TODO Post instantiate callbacks
-        const processorCallbacks = [];
-        const preinstantiateCallbacks = [];
-
-        if (typeof savedPatches !== "undefined") {
-            for (let i = 0; i < savedPatches.length; i++) {
-                const thisPatch = savedPatches[i];
-
-                // TODO Improve this matching in the future
-                if (thisPatch.url == (window.location.host + window.location.pathname) && thisPatch.enabled) {
-                    // TODO The original function patch spec sucked, so now we have extra checks for backwards compatibility. In the future, this should
-                    // just be removed.
-                    let functionPatches;
-
-                    if (typeof thisPatch.version === "undefined") {
-                        functionPatches = [
-                            {
-                                index: thisPatch.index,
-                                bytes: thisPatch.bytes,
-                            }
-                        ];
-                    }
-                    else {
-                        functionPatches = thisPatch.functionPatches;
-                    }
-
-                    const patchParams = {
-                        version: thisPatch.version,
-                        functionPatches: functionPatches,
-                    };
-
-                    injectPatches.push(patchParams);
-
-                    const callbacks = thisPatch.callbacks;
-
-                    if (typeof callbacks === "object") {
-                        if (typeof callbacks.processor === "string" ) {
-                            processorCallbacks.push(thisPatch.callbacks.processor);
-                        }
-                        if (typeof callbacks.preinstantiate === "string" ) {
-                            preinstantiateCallbacks.push(thisPatch.callbacks.preinstantiate);
-                        }
-                    }
-                }
-            }
-
-            if (injectPatches.length > 0 || preinstantiateCallbacks.length > 0) {
-                const injectPatchesStr = JSON.stringify(injectPatches);
-
-                const allCallbacks = {
-                    processor: processorCallbacks,
-                    preinstantiate: preinstantiateCallbacks,
-                }
-
-                const allCallbacksStr = JSON.stringify(allCallbacks);
-
-                const code = `const cetusPatches = ${injectPatchesStr}; const cetusCallbacks = ${allCallbacksStr};`;
-
-                injectCode(code);
-            }
-        }
+  const LIVE = ["cheatTables", "hotkeys", "scripts", "globalFreezes", "customTypes"];
+  const build = async () => {
+    const { savedPatches, instrumentOptions, cheatTables, hotkeys, scripts, globalFreezes, customTypes } =
+      await chrome.storage.local.get(["savedPatches", "instrumentOptions", ...LIVE]);
+    const patches = [], processor = [], preinstantiate = [], site = location.host + location.pathname;
+    for (const p of Array.isArray(savedPatches) ? savedPatches : []) if (p?.url === site && p.enabled) {
+      const list = p.version ? p.functionPatches ?? [] : [p];
+      const fp = ({ index, bytes, space, locals }) => ({ index, bytes: Object.values(bytes ?? []), space, locals });
+      patches.push(...list.map(fp));
+      if (typeof p.callbacks?.processor === "string") processor.push(p.callbacks.processor);
+      if (typeof p.callbacks?.preinstantiate === "string") preinstantiate.push(p.callbacks.preinstantiate);
     }
-
-    injectScript("/shared/utils.js");
-    injectScript("/shared/wail.min.js/wail.min.js");
-    injectScript("/content/thirdparty/stacktrace/stacktrace.min.js");
-    injectScript("/content/cetus.js");
-    injectScript("/content/init.js");
-});
+    const table = cheatTables?.[site], keys = hotkeys?.[site], list = scripts?.[site], globals = globalFreezes?.[site];
+    const types = customTypes?.[site];
+    config = { patches, callbacks: { processor, preinstantiate }, instrumentOptions: {
+      precise: false, trace: [], globalWatch: [], coverage: false, breakpoints: [], stepTrace: [], ...instrumentOptions?.[site] },
+      table: Array.isArray(table) ? table.filter(e => e?.frozen || e?.watch?.length) : [], hotkeys: Array.isArray(keys) ? keys : [], scripts: Array.isArray(list) ? list.filter(s => s?.enabled) : [],
+      hotkeyScripts: Array.isArray(list) && Array.isArray(keys) ? list.filter(s => keys.some(k => k?.action === "toggleScript" && k.script === s?.name)) : [], globals: Array.isArray(globals) ? globals : [],
+      customTypes: Array.isArray(types) ? types : [] };
+  };
+  build().then(sendConfig);
+  chrome.storage.onChanged.addListener((ch, area) => {
+    const site = location.host + location.pathname;
+    const moved = k => ch[k] && JSON.stringify(ch[k].oldValue?.[site]) !== JSON.stringify(ch[k].newValue?.[site]);
+    if (area !== "local" || !LIVE.some(moved)) return;
+    build().then(() => out(JSON.stringify({ type: "config", body: config })));
+  });
+})();

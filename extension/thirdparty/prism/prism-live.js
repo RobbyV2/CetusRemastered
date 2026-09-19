@@ -5,35 +5,8 @@
 */
 (async function() {
 
-if (!window.Bliss) {
-    // Load Bliss if not loaded
-    console.log("Bliss not loaded. Loading remotely from blissfuljs.com");
-
-    let bliss = document.createElement("script");
-    bliss.src = "https://blissfuljs.com/bliss.shy.min.js";
-    document.head.appendChild(bliss);
-
-    await new Promise(resolve => bliss.onload = resolve);
-}
-
 var $ = Bliss, $$ = Bliss.$;
 var ready = Promise.resolve();
-
-if (document.currentScript) {
-    // Tiny dynamic loader. Use e.g. ?load=css,markup,javascript to load components
-    var base = document.currentScript.src;
-    var load = new URL(base).searchParams.get("load");
-
-    if (load !== null) {
-        var files = ["../prism-live.css"];
-
-        if (load) {
-            files.push(...load.split(/,/).map(c => /\./.test(c)? c : `prism-live-${c}.js`));
-        }
-
-        ready = Promise.all(files.map(url => $.load(url, base)));
-    }
-}
 
 var superKey = navigator.platform.indexOf("Mac") === 0? "metaKey" : "ctrlKey";
 
